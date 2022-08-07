@@ -1,0 +1,924 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns:db="http://www.mulesoft.org/schema/mule/db" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:apikit="http://www.mulesoft.org/schema/mule/mule-apikit" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:salesforce="http://www.mulesoft.org/schema/mule/salesforce" xmlns:secure-properties="http://www.mulesoft.org/schema/mule/secure-properties" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd http://www.mulesoft.org/schema/mule/mule-apikit http://www.mulesoft.org/schema/mule/mule-apikit/current/mule-apikit.xsd http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd  http://www.mulesoft.org/schema/mule/salesforce http://www.mulesoft.org/schema/mule/salesforce/current/mule-salesforce.xsd http://www.mulesoft.org/schema/mule/secure-properties http://www.mulesoft.org/schema/mule/secure-properties/current/mule-secure-properties.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd">
+    <http:listener-config name="customercaseapi-httpListenerConfig">
+        <http:listener-connection host="${secure::http.host}" port="${secure::http.port}" readTimeout="${secure::http.timeout}" />
+    </http:listener-config>
+    <apikit:config name="customercaseapi-config" api="customercaseapi.raml" outboundHeadersMapName="outboundHeaders" httpStatusVarName="httpStatus" />
+    <salesforce:sfdc-config name="Salesforce_Config" doc:name="Salesforce Config" doc:id="0c2f01cb-d268-48a9-b23e-9177923a21ef">
+        <salesforce:basic-connection username="${secure::salesforce.username}" password="Quxo^#9622" securityToken="${secure::salesforce.securityToken}" />
+    </salesforce:sfdc-config>
+    <secure-properties:config name="Secure_Properties_Config" doc:name="Secure Properties Config" doc:id="044d854b-6f60-4b66-a84e-4a7c84301e30" file="config.yaml" key="1qaz2wsx3edc4rfv" />
+    <configuration doc:name="Configuration" doc:id="b73e8ebc-6bae-40ef-bcd6-feb9a0bcab0f" defaultErrorHandler-ref="error-handlerError_Handler" />
+	<db:config name="Database_Config1" doc:name="Database Config" doc:id="92110e02-becb-4427-8e6c-06357314837a" >
+		<db:my-sql-connection host="${secure::database.host}" port="${secure::database.port}" user="${secure::database.username}" password="root" database="${secure::database.dbname}" />
+	</db:config>
+	<flow name="customercaseapi-main">
+        <http:listener config-ref="customercaseapi-httpListenerConfig" path="/api/*">
+            <http:response statusCode="#[vars.httpStatus default 200]">
+                <http:headers>#[vars.outboundHeaders default {}]</http:headers>
+            </http:response>
+            <http:error-response statusCode="#[vars.httpStatus default 500]">
+                <http:body>#[payload]</http:body>
+                <http:headers>#[vars.outboundHeaders default {}]</http:headers>
+            </http:error-response>
+        </http:listener>
+        <apikit:router config-ref="customercaseapi-config" />
+        <error-handler>
+            <on-error-propagate type="APIKIT:BAD_REQUEST">
+                <ee:transform>
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  "status": "error",
+  "messageID": correlationId,
+  "errorCode": "400",
+  "errorMessage": "Request validation is unsuccessful. Please check the request again."
+}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus"><![CDATA[400]]></ee:set-variable>
+						<ee:set-variable variableName="requestOperation" ><![CDATA[%dw 2.0
+output application/java
+---
+attributes.maskedRequestPath]]></ee:set-variable>
+						<ee:set-variable variableName="request" ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+				<async doc:name="Async" doc:id="1b64afb6-22bf-4795-8b19-e471e08056b8" >
+					<flow-ref doc:name="calling-capture_Error_Audit_Logs" doc:id="c60a4faf-d707-4e86-8817-4565baa06a28" name="capture_Error_Audit_Logs" />
+				</async>
+            </on-error-propagate>
+            <on-error-propagate type="APIKIT:NOT_FOUND">
+                <ee:transform>
+                    <ee:message>
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+  "status": "error",
+  "messageID": correlationId,
+  "errorCode": "404",
+  "errorMessage": "Resource not found. Please check the request URL again."
+}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus"><![CDATA[404]]></ee:set-variable>
+						<ee:set-variable variableName="requestOperation" ><![CDATA[%dw 2.0
+output application/json
+---
+attributes.maskedRequestPath]]></ee:set-variable>
+						<ee:set-variable variableName="request" ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+				<async doc:name="Async" doc:id="2339e5df-21c1-46f6-9fb2-51d3e02c2ae9" >
+					<flow-ref doc:name="calling-capture_Error_Audit_Logs" doc:id="2d10973f-3df1-42d1-878d-f831df9a0ba0" name="capture_Error_Audit_Logs"/>
+				</async>
+            </on-error-propagate>
+            <on-error-propagate type="APIKIT:METHOD_NOT_ALLOWED">
+                <ee:transform>
+                    <ee:message>
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+status:"error",
+messageID: correlationId,
+errorCode:"405",
+errormessage: "Method not allowed. Please check again."
+}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus"><![CDATA[405]]></ee:set-variable>
+						<ee:set-variable variableName="requestOperation" ><![CDATA[%dw 2.0
+output application/json
+---
+attributes.maskedRequestPath]]></ee:set-variable>
+						<ee:set-variable variableName="request" ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+				<async doc:name="Async" doc:id="664685d0-70a7-4e44-b749-e29a9d259102" >
+					<flow-ref doc:name="calling-capture_Error_Audit_Logs" doc:id="edf2c91f-d523-4f12-8e50-d7d575b070b6" name="capture_Error_Audit_Logs"/>
+				</async>
+            </on-error-propagate>
+            <on-error-propagate type="APIKIT:NOT_ACCEPTABLE">
+                <ee:transform>
+                    <ee:message>
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Not acceptable"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus"><![CDATA[406]]></ee:set-variable>
+						<ee:set-variable variableName="requestOperation" ><![CDATA[%dw 2.0
+output application/json
+---
+attributes.maskedRequestPath]]></ee:set-variable>
+						<ee:set-variable variableName="request" ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+				<async doc:name="Async" doc:id="55c6de7f-4c45-4ce4-8a2a-ef2079e07f8e" >
+					<flow-ref doc:name="calling-capture_Error_Audit_Logs" doc:id="7e8891f5-ceb7-4524-a037-e2e503cd94ef" name="capture_Error_Audit_Logs"/>
+				</async>
+            </on-error-propagate>
+            <on-error-propagate type="APIKIT:UNSUPPORTED_MEDIA_TYPE">
+                <ee:transform>
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  "status": "error",
+  "messageID": correlationId,
+  "errorCode": "415",
+  "errorMessage": "Request media type is not supported. Please check the request again."
+}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus"><![CDATA[415]]></ee:set-variable>
+						<ee:set-variable variableName="requestOperation" ><![CDATA[%dw 2.0
+output application/json
+---
+attributes.maskedRequestPath]]></ee:set-variable>
+						<ee:set-variable variableName="request" ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+				<async doc:name="Async" doc:id="b9bf0920-bf6c-412d-8f6f-f3836a6f327c" >
+					<flow-ref doc:name="calling-capture_Error_Audit_Logs" doc:id="70a7c860-4bea-4165-b9a2-3d97b0ede3cc" name="capture_Error_Audit_Logs"/>
+				</async>
+            </on-error-propagate>
+            <on-error-propagate type="APIKIT:NOT_IMPLEMENTED">
+                <ee:transform>
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Not Implemented"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus"><![CDATA[501]]></ee:set-variable>
+						<ee:set-variable variableName="request" ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+				<async doc:name="Async" doc:id="ac991429-4c08-4ecf-a00d-679e2157d5d5" >
+					<flow-ref doc:name="calling-capture_Error_Audit_Logs" doc:id="e32518c9-1105-49d9-96ae-9fcbd4cc71ce" name="capture_Error_Audit_Logs"/>
+				</async>
+            </on-error-propagate>
+        </error-handler>
+    </flow>
+    <flow name="customercaseapi-console">
+        <http:listener config-ref="customercaseapi-httpListenerConfig" path="/console/*">
+            <http:response statusCode="#[vars.httpStatus default 200]">
+                <http:headers>#[vars.outboundHeaders default {}]</http:headers>
+            </http:response>
+            <http:error-response statusCode="#[vars.httpStatus default 500]">
+                <http:body>#[payload]</http:body>
+                <http:headers>#[vars.outboundHeaders default {}]</http:headers>
+            </http:error-response>
+        </http:listener>
+        <apikit:console config-ref="customercaseapi-config" />
+        <error-handler>
+            <on-error-propagate type="APIKIT:NOT_FOUND">
+                <ee:transform>
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Resource not found"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">404</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+				<async doc:name="Async" doc:id="cdb5e0a3-3733-4e87-a742-f181dc8ce51f" >
+					<flow-ref doc:name="calling-capture_Error_Audit_Logs" doc:id="37d03b26-e7fc-471f-b2d4-5078a39d109e" name="capture_Error_Audit_Logs" />
+				</async>
+            </on-error-propagate>
+        </error-handler>
+    </flow>
+    <flow name="put:\update\case:application\json:customercaseapi-config">
+        <flow-ref doc:name="calling-capture_requestPayload_time_date" doc:id="f210d69a-8253-4c45-a392-0f3b11ac7b25" name="capture_requestPayload_time_date"/>
+		<set-variable value='#["/update/case"]' doc:name="requestOperation" doc:id="ac7dc7ca-518b-4165-ad8a-e918754ea1fa" variableName="requestOperation"/>
+		<ee:transform doc:name="fetching customerId and storing caseRequest" doc:id="de86c88c-0ff8-4ac8-bda2-5d3a5578fd96">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/java
+---
+{
+}]]></ee:set-payload>
+            </ee:message>
+            <ee:variables>
+                <ee:set-variable variableName="caseRequest"><![CDATA[%dw 2.0
+output application/java
+---
+payload]]></ee:set-variable>
+                <ee:set-variable variableName="fetchCustomerId"><![CDATA[%dw 2.0
+output application/java
+---
+payload.caseDetails.customerId]]></ee:set-variable>
+				<ee:set-variable variableName="request" ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-variable>
+            </ee:variables>
+        </ee:transform>
+        <salesforce:query doc:name="fetching customerId from salesforce" doc:id="a50a5cc5-c59e-42e7-9056-cbafcb92d1c9" config-ref="Salesforce_Config">
+            <salesforce:salesforce-query><![CDATA[SELECT Id FROM Customer__c WHERE Id = ':customerId']]></salesforce:salesforce-query>
+            <salesforce:parameters><![CDATA[#[output application/java
+---
+{
+	customerId : vars.fetchCustomerId
+}]]]></salesforce:parameters>
+        </salesforce:query>
+        <choice doc:name="Validates if customer exists" doc:id="20197825-34a0-40fd-b93b-036074759827">
+            <when expression="#[sizeOf(payload) &gt;= 1]">
+                <salesforce:query doc:name="fetching caseNumber from salesforce" doc:id="a663572e-9340-494a-93ad-42b1031e1819" config-ref="Salesforce_Config">
+                    <salesforce:salesforce-query><![CDATA[SELECT CaseNumber__c FROM Case__c WHERE CaseNumber__c = ':caseNumber']]></salesforce:salesforce-query>
+                    <salesforce:parameters><![CDATA[#[output application/java
+---
+{
+	caseNumber : vars.caseRequest.caseDetails.caseNumber
+}]]]></salesforce:parameters>
+                </salesforce:query>
+                <choice doc:name="Validates if the case number exists" doc:id="4ac9f0e4-3056-45d3-8e88-d9fdd6a5e8c1">
+                    <when expression="#[sizeOf(payload) &gt;= 1]">
+                        <set-variable value="#[vars.caseRequest.caseDetails.caseNumber]" doc:name="fetchCaseNumber" doc:id="6149aa81-d7e5-4325-b980-916815f1c084" variableName="fetchCaseNumber" />
+                        <salesforce:query doc:name="fetch caseId from salesforce based on caseNumber " doc:id="78327347-b009-4992-8a78-9c1fa6fa8b5d" config-ref="Salesforce_Config">
+                            <salesforce:salesforce-query><![CDATA[SELECT Id FROM Case__c WHERE CaseNumber__c = ':caseNumber']]></salesforce:salesforce-query>
+                            <salesforce:parameters><![CDATA[#[output application/java
+---
+{
+	caseNumber : vars.fetchCaseNumber
+}]]]></salesforce:parameters>
+                        </salesforce:query>
+                        <set-variable value="#[payload.Id reduce $]" doc:name="fetchCaseId" doc:id="1f1c4b7e-14c4-4365-ae25-0ad0cd215dd2" variableName="fetchCaseId" />
+                        <ee:transform doc:name="framing request as per salesforce" doc:id="d0ce32ce-40f9-4e3a-9ea9-4fb2ec70551e">
+                            <ee:message>
+                                <ee:set-payload><![CDATA[%dw 2.0
+output application/java
+---
+[
+    {
+    	id : vars.fetchCaseId,
+    	CustomerId__c : vars.fetchCustomerId,
+        CaseNumber__c : vars.caseRequest.caseDetails.caseNumber,
+        caseDescription__c : vars.caseRequest.caseDetails.caseDescription,
+        caseStatus__c : vars.caseRequest.caseDetails.caseStatus,
+        adjudicationRequired__c : vars.caseRequest.caseDetails.adjudicationRequired
+    }
+]]]></ee:set-payload>
+                            </ee:message>
+                        </ee:transform>
+                        <salesforce:update type="Case__c" doc:name="Update case in salesforce" doc:id="03561082-c1ed-43e6-9c38-ee94a492254f" config-ref="Salesforce_Config" />
+                        <ee:transform doc:name="success response" doc:id="526c5641-eae5-455e-aca4-8cca66ee8eee">
+                            <ee:message>
+                                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+status:"success",
+messageID: correlationId,
+caseId : vars.fetchCaseId,
+CustomerId: vars.fetchCustomerId,
+message: "The case details are successfully updated in Salesforce"
+}]]></ee:set-payload>
+                            </ee:message>
+                        </ee:transform>
+                    </when>
+                    <otherwise>
+                        <ee:transform doc:name="caseNumber unavailablily response" doc:id="0b4ecdbf-c44a-4873-bd4a-95ac71d64379">
+                            <ee:message>
+                                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"status" : "Case update unsuccessful",
+	"message" : "Case number does not exist, please check again."
+}]]></ee:set-payload>
+                            </ee:message>
+                        </ee:transform>
+                    </otherwise>
+                </choice>
+            </when>
+            <otherwise>
+                <ee:transform doc:name="customerId unavailablity response" doc:id="695e50f1-7873-4711-a2ec-eb8672e062c0">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	status : "Unsuccessful",
+	message : "Customer details does not exist. Please check again"
+}]]></ee:set-payload>
+                    </ee:message>
+                </ee:transform>
+            </otherwise>
+        </choice>
+		<async doc:name="Async" doc:id="6ed9c3b3-bf3f-4e39-8d16-6c02f497ab2e" >
+			<flow-ref doc:name="calling-capture_Audit_logs" doc:id="72b369e9-029c-43d0-a197-a9dcfa53807f" name="capture_Audit_logs" />
+		</async>
+    </flow>
+    <flow name="put:\update\customer:application\json:customercaseapi-config">
+        <flow-ref doc:name="calling-capture_requestPayload_time_date" doc:id="fde145ea-6f25-4b1f-be8e-c30f68b7849a" name="capture_requestPayload_time_date"/>
+		<set-variable value='#["/update/customer"]' doc:name="requestOperation" doc:id="d780e631-e84c-4390-ab3a-8f9d89166e27" variableName="requestOperation"/>
+		<ee:transform doc:name="Transform Message" doc:id="abf1eb6c-52db-4950-9c95-523b381e7493">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/java
+---
+{
+}]]></ee:set-payload>
+            </ee:message>
+            <ee:variables>
+                <ee:set-variable variableName="requestPayload"><![CDATA[%dw 2.0
+output application/java
+---
+payload]]></ee:set-variable>
+                <ee:set-variable variableName="firstName"><![CDATA[%dw 2.0
+output application/java
+---
+payload.customerDetails.customerFirstName]]></ee:set-variable>
+                <ee:set-variable variableName="lastName"><![CDATA[%dw 2.0
+output application/java
+---
+payload.customerDetails.customerLastName]]></ee:set-variable>
+				<ee:set-variable variableName="request" ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-variable>
+            </ee:variables>
+        </ee:transform>
+        <salesforce:query doc:name="fetching id based on customer firstname and lastname" doc:id="a3145d45-b74a-419b-8136-12317a7926a3" config-ref="Salesforce_Config">
+            <salesforce:salesforce-query><![CDATA[SELECT Id FROM Customer__c WHERE CustomerFirstName__c = ':firstName' AND CustomerLastName__c = ':lastName']]></salesforce:salesforce-query>
+            <salesforce:parameters><![CDATA[#[output application/java
+---
+{
+	firstName : vars.firstName,
+	lastName : vars.lastName
+}]]]></salesforce:parameters>
+        </salesforce:query>
+        <set-variable value="#[payload.Id reduce $]" doc:name="fetchId" doc:id="a20907ba-8295-4c9b-98c2-5ac181d7c2fb" variableName="fetchId" />
+        <choice doc:name="Validates if customer exists" doc:id="87dbb409-def4-4a9e-86a0-7d47190c72d1">
+            <when expression="#[sizeOf(payload) &gt;= 1]">
+                <ee:transform doc:name="fetching customerId and request payload" doc:id="d99a5a01-dd65-4387-a1ae-4f8bfd81bf99">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	id: vars.fetchId,
+	"requestPayload" : vars.requestPayload
+}]]></ee:set-payload>
+                    </ee:message>
+                </ee:transform>
+                <ee:transform doc:name="framing request for salesforce" doc:id="46d1bf7f-4ecb-444f-81b0-401f5aff2927">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/java
+---
+[
+    {
+        id : payload.id,
+        CustomerFirstName__c : payload.requestPayload.customerDetails.customerFirstName,
+        CustomerLastName__c: payload.requestPayload.customerDetails.customerLastName,
+        Address1__c : payload.requestPayload.customerDetails.address1,
+        Address2__c : payload.requestPayload.customerDetails.address2,
+        City__c : payload.requestPayload.customerDetails.city,
+        PostalCode__c : payload.requestPayload.customerDetails.postalcode,
+        ModeOfCommunication__c : payload.requestPayload.customerDetails.modeOfCommunication,
+        email__c : payload.requestPayload.customerDetails.email,
+        phoneNumber__c : payload.requestPayload.customerDetails.phoneNumber
+    }
+]]]></ee:set-payload>
+                    </ee:message>
+                </ee:transform>
+                <salesforce:update type="Customer__c" doc:name="Update customer details in salesforce" doc:id="398ea81d-dfe4-48d5-9a72-d55d0c156f56" config-ref="Salesforce_Config" />
+                <ee:transform doc:name="success response" doc:id="02f0b233-6f9e-40db-a0a1-45d11c4e4116">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+status:"success",
+messageID: correlationId,
+customerId : vars.fetchId,
+message: "The customer details are successfully updated in Salesforce"
+}]]></ee:set-payload>
+                    </ee:message>
+                </ee:transform>
+            </when>
+            <otherwise>
+                <ee:transform doc:name="customerId unavailability response" doc:id="73bca269-d9d4-42a5-9619-0204bc32bf13">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	status : "Unsuccessful",
+	message : "Customer details does not exist. Please check again"
+}]]></ee:set-payload>
+                    </ee:message>
+                </ee:transform>
+            </otherwise>
+        </choice>
+		<async doc:name="Async" doc:id="533ec8bc-92f4-41b8-a992-5889ade7ee9a" >
+			<flow-ref doc:name="calling-capture_Audit_logs" doc:id="99aee42e-ce9d-4bb7-9d2d-331add0ae446" name="capture_Audit_logs"/>
+		</async>
+    </flow>
+    <flow name="post:\create\case:application\json:customercaseapi-config" doc:id="f4018b81-f6bb-4e68-818e-d265bddb6853">
+        <flow-ref doc:name="calling_requestPayload_time_date" doc:id="e2e4a89e-2d1c-4421-8a9d-32ade1f78ce5" name="capture_requestPayload_time_date"/>
+		<set-variable value='#["/create/case"]' doc:name="requestOperation" doc:id="2511e18d-b22c-454c-ac55-e0053b863145" variableName="requestOperation"/>
+		<ee:transform doc:name="Store payload &amp; fetch customerId" doc:id="44d50529-78e7-4887-a55d-09c8e6f874d0">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/java
+---
+{
+}]]></ee:set-payload>
+            </ee:message>
+            <ee:variables>
+                <ee:set-variable variableName="caseRequest"><![CDATA[%dw 2.0
+output application/java
+---
+payload]]></ee:set-variable>
+                <ee:set-variable variableName="fetchCustomerId"><![CDATA[%dw 2.0
+output application/java
+---
+payload.caseDetails.customerId]]></ee:set-variable>
+				<ee:set-variable variableName="request" ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-variable>
+            </ee:variables>
+        </ee:transform>
+        <salesforce:query doc:name="fetch customerId from salesforce" doc:id="e89215c8-9c58-47e7-8e4c-c4fc32c528fc" config-ref="Salesforce_Config">
+            <salesforce:salesforce-query><![CDATA[SELECT Id FROM Customer__c WHERE Id = ':customerId']]></salesforce:salesforce-query>
+            <salesforce:parameters><![CDATA[#[output application/java
+---
+{
+	customerId : vars.fetchCustomerId
+}]]]></salesforce:parameters>
+        </salesforce:query>
+        <choice doc:name="Validates if the customer exists" doc:id="025a679b-f982-4407-8d8c-c06dfba5a0c4">
+            <when expression="#[sizeOf(payload) &gt;= 1]">
+                <salesforce:query doc:name="fetch caseNumber from salesforce" doc:id="6b86e08c-b088-4208-8539-fab08342eab4" config-ref="Salesforce_Config">
+                    <salesforce:salesforce-query><![CDATA[SELECT CaseNumber__c FROM Case__c WHERE CaseNumber__c = ':caseNumber']]></salesforce:salesforce-query>
+                    <salesforce:parameters><![CDATA[#[output application/java
+---
+{
+	caseNumber : vars.caseRequest.caseDetails.caseNumber
+}]]]></salesforce:parameters>
+                </salesforce:query>
+                <choice doc:name="Validates if the case number exists" doc:id="94c814d4-1f07-48d3-a9f6-985fb797f3f5">
+                    <when expression="#[isEmpty(payload)]">
+                        <ee:transform doc:name="calling the caseRequest variable" doc:id="0b6aaa8f-b4fa-4ae7-9167-16af26d8a17f">
+                            <ee:message>
+                                <ee:set-payload><![CDATA[%dw 2.0
+output application/java
+---
+vars.caseRequest]]></ee:set-payload>
+                            </ee:message>
+                        </ee:transform>
+                        <ee:transform doc:name="framing payload as per salesforce format" doc:id="88712d43-2a44-4b46-8e68-4902348f95d9">
+                            <ee:message>
+                                <ee:set-payload><![CDATA[%dw 2.0
+output application/java
+---
+[
+    {
+    	CustomerId__c : vars.fetchCustomerId,
+        CaseNumber__c : payload.caseDetails.caseNumber,
+        caseDescription__c : payload.caseDetails.caseDescription,
+        caseStatus__c : payload.caseDetails.caseStatus,
+        adjudicationRequired__c : payload.caseDetails.adjudicationRequired
+    }
+]]]></ee:set-payload>
+                            </ee:message>
+                        </ee:transform>
+                        <salesforce:create type="Case__c" doc:name="Create case for customer" doc:id="0cbc8e94-0eea-44c7-9597-aa3c201a63fa" config-ref="Salesforce_Config" />
+                        <ee:transform doc:name="success response">
+                            <ee:message>
+                                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+status:"success",
+messageID: correlationId,
+CustomerId: vars.fetchCustomerId,
+message: "The case details are successfully created in Salesforce"
+}]]></ee:set-payload>
+                            </ee:message>
+                        </ee:transform>
+                    </when>
+                    <otherwise>
+                        <ee:transform doc:name="caseNumber duplicate response" doc:id="cfe174b4-7c22-47c0-9a62-afa679b9ea3e">
+                            <ee:message>
+                                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	status : "DUPLICATE_VALUE",
+	messageId : correlationId,
+	Message : "Duplicate case number found. Please check again. "
+}]]></ee:set-payload>
+                            </ee:message>
+                        </ee:transform>
+                    </otherwise>
+                </choice>
+            </when>
+            <otherwise>
+                <ee:transform doc:name="customerId unavailablity response" doc:id="ef1cf1dc-3398-4ea3-80e4-5ceeb45c228d">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	status : "Unsuccessful",
+	messageId : correlationId,
+	Message : "Requested customerId does not exist. Please check again. "
+}]]></ee:set-payload>
+                    </ee:message>
+                </ee:transform>
+            </otherwise>
+        </choice>
+		<async doc:name="Async" doc:id="71c7cb1c-a0be-4d5f-86ce-ff1649953b9f" >
+			<flow-ref doc:name="calling_Audit_logs" doc:id="2b8e039a-b59a-4578-bf3f-0b8c797324a0" name="capture_Audit_logs"/>
+		</async>
+    </flow>
+    <flow name="post:\create\customer:application\json:customercaseapi-config" doc:id="43f25c0f-fc8d-432c-b690-0c33257c309c">
+        <flow-ref doc:name="calling_requestPayload_time_date" doc:id="ca53b661-5466-417e-b0ab-01500ab81ded" name="capture_requestPayload_time_date"/>
+		<set-variable value='#["/create/customer"]' doc:name="requestOperation" doc:id="fb53e3d1-f218-4ca1-a7ca-49906c3a76a1" variableName="requestOperation"/>
+		<ee:transform doc:name="Storing requestPayload, customerfirstName, lastName" doc:id="b29b27ac-87d9-456c-9d3e-7b2c4858f633">
+            <ee:message>
+            </ee:message>
+            <ee:variables>
+                <ee:set-variable variableName="firstName"><![CDATA[%dw 2.0
+output application/java
+---
+payload.customerDetails.customerFirstName]]></ee:set-variable>
+                <ee:set-variable variableName="lastName"><![CDATA[%dw 2.0
+output application/java
+---
+payload.customerDetails.customerLastName]]></ee:set-variable>
+                <ee:set-variable variableName="customerRequest"><![CDATA[%dw 2.0
+output application/java
+---
+payload]]></ee:set-variable>
+				<ee:set-variable variableName="request" ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-variable>
+            </ee:variables>
+        </ee:transform>
+        <salesforce:query doc:name="fetch customerId based on firstName and lastName" doc:id="ad6b15aa-23cc-4649-886d-5b4b597951a0" config-ref="Salesforce_Config">
+            <salesforce:salesforce-query><![CDATA[SELECT Id FROM Customer__c WHERE CustomerFirstName__c = ':firstName' AND CustomerLastName__c = ':lastName']]></salesforce:salesforce-query>
+            <salesforce:parameters><![CDATA[#[output application/java
+---
+{
+	firstName : vars.firstName,
+	lastName : vars.lastName
+}]]]></salesforce:parameters>
+        </salesforce:query>
+        <choice doc:name="Validates if the customer exists" doc:id="03faaf6a-01f1-4a91-9360-4b81f4a74c76">
+            <when expression="#[isEmpty(payload)]">
+                <ee:transform doc:name="call customerRequst variable" doc:id="ec712a55-2b66-4c98-b6aa-3bc91e349f93">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/java
+---
+vars.customerRequest]]></ee:set-payload>
+                    </ee:message>
+                </ee:transform>
+                <ee:transform doc:name="framing request as per Salesforce" doc:id="919f642c-7ea1-4dee-a60c-5a141d21e3f8">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/java
+---
+[
+    {
+        "CustomerFirstName__c" : payload.customerDetails.customerFirstName,
+        "CustomerLastName__c" : payload.customerDetails.customerLastName,
+        "Address1__c" : payload.customerDetails.address1,
+        "Address2__c" : payload.customerDetails.address2,
+        "City__c" : payload.customerDetails.city,
+        "PostalCode__c" : payload.customerDetails.postalcode,
+        "ModeOfCommunication__c" : payload.customerDetails.modeOfCommunication,
+        "email__c" : payload.customerDetails.email,
+        "phoneNumber__c" : payload.customerDetails.phoneNumber
+    }
+]]]></ee:set-payload>
+                    </ee:message>
+                </ee:transform>
+                <salesforce:create doc:name="Create customer record" doc:id="f6395c6f-97f7-48dc-b738-e13f833fbf4a" config-ref="Salesforce_Config" type="Customer__c" />
+                <choice doc:name="validates if the customer got successfully inserted" doc:id="224397fd-f603-4028-bb1b-b82b4fe010a9">
+                    <when expression="#[payload.successful == true]">
+                        <salesforce:query doc:name="fetch the customer Id from salesforce" doc:id="d2d1403c-344d-4f97-b599-9853eef8f849" config-ref="Salesforce_Config">
+                            <salesforce:salesforce-query><![CDATA[SELECT Id FROM Customer__c WHERE CustomerFirstName__c = ':firstName' AND CustomerLastName__c = ':lastName']]></salesforce:salesforce-query>
+                            <salesforce:parameters><![CDATA[#[output application/java
+---
+{
+	firstName : vars.firstName,
+	lastName : vars.LastName
+}]]]></salesforce:parameters>
+                        </salesforce:query>
+                        <set-variable value="#[payload.Id reduce $]" doc:name="custId" doc:id="b6a1c5cf-a437-4718-9c83-820bf508e946" variableName="custId" />
+                    </when>
+                    <otherwise>
+                        <ee:transform doc:name="customer record creation unsuccessful response" doc:id="c48a74d2-f6eb-40dd-a7c2-a05d1b5973a6">
+                            <ee:message>
+                                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"status" : "Unsuccessful",
+	"message" : "Customer record creation is not successful"
+}]]></ee:set-payload>
+                            </ee:message>
+                        </ee:transform>
+                    </otherwise>
+                </choice>
+                <ee:transform doc:name="success response" doc:id="0e698f90-6c99-4148-89de-b84af0457fbd">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+status:"success",
+messageID: correlationId,
+customerId : vars.custId,
+message: "The customer details are successfully inserted in Salesforce"
+}]]></ee:set-payload>
+                    </ee:message>
+                </ee:transform>
+            </when>
+            <otherwise>
+                <ee:transform doc:name="customerRecord exist response" doc:id="6a0db835-1a56-4b0d-b1d0-9095c684a9c4">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	status : "Unsuccessfull",
+	Message : "Record already exists. Please check again..!!"
+}]]></ee:set-payload>
+                    </ee:message>
+                </ee:transform>
+            </otherwise>
+        </choice>
+		<async doc:name="Async" doc:id="efbd09cd-3b70-4a40-8ce2-e91b5412fd81">
+					<flow-ref doc:name="Call audit log flow" doc:id="f0b94b1a-2d23-4f83-917f-de28aabb050c" name="capture_Audit_logs" />
+				</async>
+    </flow>
+    <flow name="post:\create\CustomerCase:application\json:customercaseapi-config">
+        <flow-ref doc:name="calling_requestPayload_time_date" doc:id="758f2070-71cc-4670-ba4d-de24a475ab9a" name="capture_requestPayload_time_date"/>
+        <set-variable value='#["/create/customerCase"]' doc:name="requestOperation" doc:id="c45f6616-d222-4128-b761-fe208c28730f" variableName="requestOperation"/>
+		<ee:transform doc:name="fetching customer's firstname &amp; last name" doc:id="7f1d888b-e1d3-4e33-93ca-46782119ba19">
+            <ee:message>
+            </ee:message>
+            <ee:variables>
+                <ee:set-variable variableName="firstName"><![CDATA[%dw 2.0
+output application/java
+---
+payload.customerDetails.customerFirstName]]></ee:set-variable>
+                <ee:set-variable variableName="lastName"><![CDATA[%dw 2.0
+output application/java
+---
+payload.customerDetails.customerLastName]]></ee:set-variable>
+				<ee:set-variable variableName="customerCaseRequest" ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-variable>
+				<ee:set-variable variableName="request" ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-variable>
+            </ee:variables>
+        </ee:transform>
+        <salesforce:query doc:name="Query customer Id based on firstName and lastName" doc:id="117038a2-04d2-4fb1-8db2-dcf118546730" config-ref="Salesforce_Config">
+            <salesforce:salesforce-query><![CDATA[SELECT Id FROM Customer__c WHERE CustomerFirstName__c = ':firstName' AND CustomerLastName__c = ':lastName']]></salesforce:salesforce-query>
+            <salesforce:parameters><![CDATA[#[output application/java
+---
+{
+	firstName : vars.firstName,
+	lastName : vars.lastName
+}]]]></salesforce:parameters>
+        </salesforce:query>
+        <ee:transform doc:name="fetching customerId and payloadSize" doc:id="65808686-0e53-48c5-bcd8-fc3b0a274957">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/java
+---
+{
+}]]></ee:set-payload>
+            </ee:message>
+            <ee:variables>
+                <ee:set-variable variableName="fetchCustomerId"><![CDATA[%dw 2.0
+output application/java
+---
+payload.Id reduce $]]></ee:set-variable>
+                <ee:set-variable variableName="payloadSize"><![CDATA[%dw 2.0
+output application/json
+---
+sizeOf(payload) as Number]]></ee:set-variable>
+            </ee:variables>
+        </ee:transform>
+        <choice doc:name="Validates if the customer record already exists" doc:id="702c5ebc-0b9e-441b-ba0b-83856b0a4bf1">
+            <when expression="#[vars.payloadSize &gt;= 1]">
+                <ee:transform doc:name="call customerCaseRequest variable" doc:id="6a1d1d3f-60cc-46a5-9308-eb64f27d6e20">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+vars.customerCaseRequest]]></ee:set-payload>
+                    </ee:message>
+                </ee:transform>
+                <ee:transform doc:name="framing request in salesforce format" doc:id="e67ec7f2-1edd-46db-a0c0-8b4628384154">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+[
+    {
+    	CustomerId__c : vars.fetchCustomerId,
+        CaseNumber__c : payload.caseDetails.caseNumber,
+        caseDescription__c : payload.caseDetails.caseDescription,
+        caseStatus__c : payload.caseDetails.caseStatus,
+        adjudicationRequired__c : payload.caseDetails.adjudicationRequired
+    }
+]]]></ee:set-payload>
+                    </ee:message>
+                </ee:transform>
+                <salesforce:create type="Case__c" doc:name="Create case for CustomerCase request" doc:id="81e80b9b-e52c-4eef-ae6d-b6b7df12bf05" config-ref="Salesforce_Config" />
+                <ee:transform doc:name="Success Response" doc:id="a152fc93-b8a6-464f-9f14-bf05ded301d7">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+status:"success",
+messageID: correlationId,
+customerId :  vars.fetchCustomerId,
+message: "The customerCase details are successfully inserted in Salesforce"
+}]]></ee:set-payload>
+                    </ee:message>
+                </ee:transform>
+            </when>
+			<otherwise>
+                <ee:transform doc:name="call customerCaseRequest variable" doc:id="3727bc35-a58b-4842-931b-c2d15be9b334">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/java
+---
+vars.customerCaseRequest]]></ee:set-payload>
+                    </ee:message>
+                </ee:transform>
+				<scatter-gather doc:name="passing the CustomerCase request parallely to create case and customer record" doc:id="6e608d20-b817-43b9-9b37-aa4573847aa9">
+                    <route>
+                        <ee:transform doc:name="frame customerRequest as per salesforce" doc:id="6c89a67a-6b5b-45b9-81a9-ad42e9ea9db0">
+							<ee:message>
+								<ee:set-payload><![CDATA[%dw 2.0
+output application/java
+---
+[
+    {
+        "CustomerFirstName__c" : payload.customerDetails.customerFirstName,
+        "CustomerLastName__c" : payload.customerDetails.customerLastName,
+        "Address1__c" : payload.customerDetails.address1,
+        "Address2__c" : payload.customerDetails.address2,
+        "City__c" : payload.customerDetails.city,
+        "PostalCode__c" : payload.customerDetails.postalcode,
+        "ModeOfCommunication__c" : payload.customerDetails.modeOfCommunication,
+        "email__c" : payload.customerDetails.email,
+        "phoneNumber__c" : payload.customerDetails.phoneNumber
+    }
+]]]></ee:set-payload>
+							</ee:message>
+						</ee:transform>
+						<salesforce:create type="Customer__c" doc:name="Create customer record" doc:id="7da3946d-137b-400e-827f-6e904ada6bbd" config-ref="Salesforce_Config"/>
+                    </route>
+					<route >
+						<ee:transform doc:name="frame caseRequest as per salesforce format" doc:id="46ee3fbe-d643-4f36-85c3-0d2fa5b8e931">
+                            <ee:message>
+                                <ee:set-payload><![CDATA[%dw 2.0
+output application/java
+---
+[
+    {
+    	CustomerId__c : vars.fetchCustomerId,
+        CaseNumber__c : payload.caseDetails.caseNumber,
+        caseDescription__c : payload.caseDetails.caseDescription,
+        caseStatus__c : payload.caseDetails.caseStatus,
+        adjudicationRequired__c : payload.caseDetails.adjudicationRequired
+    }
+]]]></ee:set-payload>
+                            </ee:message>
+                        </ee:transform>
+						<salesforce:create type="Case__c" doc:name="Create customer case" doc:id="d00003fa-1207-41a9-9c0d-1877ff6a866e" config-ref="Salesforce_Config" />
+					</route>
+                </scatter-gather>
+				<ee:transform doc:name="Success response" doc:id="e57669ce-785a-4576-9e4d-a5ab08bca44d">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+status:"success",
+messageId : correlationId,
+customerId : (payload."0".payload.items.id) reduce $,
+caseId : (payload."1".payload.items.id) reduce $,
+message: "The customer & case details are successfully created in Salesforce"
+}]]></ee:set-payload>
+                    </ee:message>
+                </ee:transform>
+            </otherwise>
+        </choice>
+		<async doc:name="Async" doc:id="6139f85a-599a-45ed-83ad-641a624249f6" >
+			<flow-ref doc:name="calling-capture_Audit_logs" doc:id="ce45ae11-5039-49f2-9da0-b7ea68b177c6" name="capture_Audit_logs"/>
+		</async>
+    </flow>
+	<sub-flow name="capture_requestPayload_time_date" doc:id="1f5fedc5-673e-4ee9-b696-b9a2ec85afb5" >
+		<ee:transform doc:name="capturing request payload, requestTime and date, messageId" doc:id="a2cd765f-97a0-4dca-a979-663fa887a5ff" >
+			<ee:message >
+			</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="requestPayload" ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-variable>
+				<ee:set-variable variableName="requestTimeStamp" ><![CDATA[%dw 2.0
+output application/json
+---
+now()[0 to 18] as String]]></ee:set-variable>
+				<ee:set-variable variableName="messageId" ><![CDATA[%dw 2.0
+output application/json
+---
+correlationId]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+	</sub-flow>
+	<sub-flow name="capture_Audit_logs" doc:id="762bd7d0-7302-40b1-9466-0e1bffdb16ef" >
+		<ee:transform doc:name="frame audit log payload" doc:id="8e5f24ed-91b1-4530-9628-fc5fafb93287" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+		MESSAGE_ID : vars.messageId,
+		OPERATION :vars.requestOperation,
+		REQUEST_TIMESTAMP : vars.requestTimeStamp,
+		RESPONSE_TIMESTAMP : now()[0 to 18] as String,
+		RESPONSE_STATUS : "Success",
+		API_REQUEST : write(vars.request, "application/json"),
+		API_RESPONSE : write(payload, "application/json")
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<db:insert doc:name="Insert audit log to database" doc:id="40e9478b-fbf8-4709-b436-7923546bace2" config-ref="Database_Config1">
+			<db:sql ><![CDATA[insert into customerCase.auditLogs (MESSAGE_ID,OPERATION,REQUEST_TIMESTAMP,RESPONSE_TIMESTAMP,RESPONSE_STATUS,API_REQUEST,API_RESPONSE) values (:MESSAGE_ID,:OPERATION,:REQUEST_TIMESTAMP,:RESPONSE_TIMESTAMP,:RESPONSE_STATUS,:API_REQUEST,:API_RESPONSE)]]></db:sql>
+			<db:input-parameters ><![CDATA[#[payload]]]></db:input-parameters>
+		</db:insert>
+	</sub-flow>
+	<sub-flow name="capture_Error_Audit_Logs" doc:id="a63729cf-27a5-4d23-9b74-aa263110e9fb" >
+		<ee:transform doc:name="frame error audit log payload" doc:id="7a68258c-7ecf-4e95-9ac3-b73ec0cf66c0">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+		MESSAGE_ID : correlationId,
+		OPERATION :vars.requestOperation,
+		REQUEST_TIMESTAMP : now()[0 to 18] as String,
+		RESPONSE_TIMESTAMP : now()[0 to 18] as String,
+		RESPONSE_STATUS : "Error",
+		API_REQUEST : write(vars.request, "application/json"),
+		ERROR_RESPONSE : write(payload, "application/json")
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<db:insert doc:name="Insert error audit log to database" doc:id="8235058f-ae19-4162-b753-ef502ca425e7" config-ref="Database_Config1">
+			<db:sql ><![CDATA[insert into customerCase.auditLogs (MESSAGE_ID,OPERATION,REQUEST_TIMESTAMP,RESPONSE_TIMESTAMP,RESPONSE_STATUS,API_REQUEST,ERROR_RESPONSE) values (:MESSAGE_ID,:OPERATION,:REQUEST_TIMESTAMP,:RESPONSE_TIMESTAMP,:RESPONSE_STATUS,:API_REQUEST,:ERROR_RESPONSE)]]></db:sql>
+			<db:input-parameters ><![CDATA[#[payload]]]></db:input-parameters>
+		</db:insert>
+	</sub-flow>
+	</mule>

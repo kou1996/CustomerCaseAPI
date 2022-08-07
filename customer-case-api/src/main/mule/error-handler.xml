@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+	<error-handler name="error-handlerError_Handler" doc:id="07850530-76b5-4846-9ab6-4c243545c89b" >
+		<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="e9d7fc7d-818f-47a4-9ca7-7737943e55fe" type="SALESFORCE:INVALID_INPUT">
+			<ee:transform doc:name="Salesforce invalid input error response" doc:id="ff58e09c-a690-4726-aa67-32c20b01351c" >
+				<ee:message >
+					<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+status:"error",
+messageID: correlationId,
+errorCode:"EC-10012",
+errormessage: "Input parameters or configuration is invalid. Please check again."
+}]]></ee:set-payload>
+				</ee:message>
+			</ee:transform>
+			<async doc:name="Async" doc:id="6fb7cf4c-764c-495a-8126-67f3bebd2450" >
+				<flow-ref doc:name="calling-capture_Error_Audit_Logs" doc:id="c457df91-534f-4bda-8a47-758abbc17fd8" name="capture_Error_Audit_Logs"/>
+			</async>
+		</on-error-propagate>
+		<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="ff4f712e-d4ed-46e4-a018-4413059de491" type="SALESFORCE:CONNECTIVITY">
+			<ee:transform doc:name="Salesforce connectivity error response" doc:id="8a137834-55df-4923-b0bc-82021209ad05" >
+				<ee:message >
+					<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+status:"error",
+messageID: correlationId,
+errorCode:"EC-10013",
+errormessage: "Salesforce is not reachable. Please try after sometime."
+}]]></ee:set-payload>
+				</ee:message>
+			</ee:transform>
+			<async doc:name="Async" doc:id="c46371d4-3366-40f5-b738-feedd97d2998" >
+				<flow-ref doc:name="calling-capture_Error_Audit_Logs" doc:id="22b296fa-e1e6-4d8f-bf84-c4dfd16f87c1" name="capture_Error_Audit_Logs" />
+			</async>
+		</on-error-propagate>
+	</error-handler>
+</mule>

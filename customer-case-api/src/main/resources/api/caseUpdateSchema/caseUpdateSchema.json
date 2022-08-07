@@ -1,0 +1,32 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "type": "object",
+  "properties": {
+    "caseDetails": {
+      "type": "object",
+      "properties": {
+        "caseNumber": {
+          "type": "string"
+        },
+        "caseDescription": {
+          "type": "string"
+        },
+        "caseStatus": {
+          "type": "string"
+        },
+        "adjudicationRequired": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "caseNumber",
+        "caseDescription",
+        "caseStatus",
+        "adjudicationRequired"
+      ]
+    }
+  },
+  "required": [
+    "caseDetails"
+  ]
+}

@@ -1,0 +1,4 @@
+%dw 2.0
+
+type auto_762bd7d0_7302_40b1_9466_0e1bffdb16ef_Input_Variables_requestDate = String
+

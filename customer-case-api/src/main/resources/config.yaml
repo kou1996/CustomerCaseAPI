@@ -1,0 +1,14 @@
+http:
+  host: "![OAxG3zf9NDboEgaOLxxLyg==]"
+  port: "![OSn1iXVw8gmIcWNL69o+7A==]"
+  timeout: "![YLBGcKgDxqTxpR+YciIY6g==]"
+  
+salesforce:
+  username: "![A3YWf4JstRAsHBpvlNfKfVeouRjM/yAuiEHuw7K6zf8=]"
+  securityToken: "![x+U0C3+gVO53BIW5beAVNeD9lSHIihAnVnryIihfKKc=]"
+  
+database:
+  host: "![OAxG3zf9NDboEgaOLxxLyg==]"
+  port: "![Nk8fqwt6wthqAKeBLfjLsw==]"
+  username: "![W0amkDSf6bU1NcB1cb0Vag==]"
+  dbname: "![G+1cqCO/BK7y3HYwjroD6g==]"
